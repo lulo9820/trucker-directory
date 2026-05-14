@@ -1,1 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trucker Directory</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{--navy:#0f1e35;--blue:#1d6bf3;--green:#16a34a;--red:#dc2626;--orange:#ea580c;--purple:#8b5cf6;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'DM Sans',sans-serif;background:#0a1628;min-height:100vh;color:#fff;}
+  body::before{content:'';position:fixed;inset:0;
+    background:radial-gradient(ellipse 80% 50% at 50% -10%,rgba(29,107,243,.18) 0%,transparent 60%),
+    linear-gradient(160deg,#0a1628 0%,#0f1e35 50%,#091525 100%);z-index:0;}
+  .app{position:relative;z-index:1;max-width:1300px;margin:0 auto;padding:0 24px 80px;}
+
+  /* setup screen removed — credentials baked in */
+
+  /* ── Header ── */
+  header{padding:36px 0 26px;display:flex;align-items:flex-end;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:26px;flex-wrap:wrap;gap:18px;}
+  .logo{display:flex;align-items:center;gap:16px;}
+  .logo-icon{width:50px;height:50px;background:var(--blue);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;box-shadow:0 0 28px rgba(29,107,243,.4);}
+  .logo-text h1{font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:2px;color:#fff;line-height:1;}
+  .logo-text p{font-size:11px;color:rgba(255,255,255,.38);letter-spacing:1px;text-transform:uppercase;margin-top:3px;}
+  .header-right{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+  .live-badge{display:flex;align-items:center;gap:6px;font-size:11px;color:#4ade80;font-family:'DM Mono',monospace;}
+  .live-dot{width:7px;height:7px;border-radius:50%;background:#4ade80;box-shadow:0 0 8px #4ade80;animation:pulse 1.5s infinite;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .header-stats{display:flex;gap:18px;align-items:center;}
+  .stat-pill{text-align:center;}
+  .stat-pill .num{font-family:'DM Mono',monospace;font-size:22px;font-weight:500;color:#fff;display:block;}
+  .stat-pill .lbl{font-size:10px;color:rgba(255,255,255,.38);text-transform:uppercase;letter-spacing:1px;}
+  .stat-div{width:1px;height:36px;background:rgba(255,255,255,.08);}
+
+  /* ── Actions ── */
+  .top-actions{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;align-items:center;}
+  .action-btn{display:flex;align-items:center;gap:7px;padding:9px 18px;border-radius:10px;border:none;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;}
+  .btn-import{background:rgba(22,163,74,.14);border:1.5px solid rgba(22,163,74,.3);color:#4ade80;}
+  .btn-import:hover{background:rgba(22,163,74,.24);}
+  .btn-add{background:rgba(29,107,243,.14);border:1.5px solid rgba(29,107,243,.3);color:#93c5fd;}
+  .btn-add:hover{background:rgba(29,107,243,.24);}
+  .btn-super{background:rgba(251,191,36,.1);border:1.5px solid rgba(251,191,36,.22);color:#fbbf24;}
+  .btn-super:hover{background:rgba(251,191,36,.2);}
+  .btn-super.active{background:rgba(251,191,36,.22);border-color:#fbbf24;color:#fff;}
+  .btn-clearall{background:rgba(220,38,38,.12);border:1.5px solid rgba(220,38,38,.28);color:#f87171;display:none;}
+  .btn-clearall:hover{background:rgba(220,38,38,.22);}
+
+  /* ── Search ── */
+  .search-section{margin-bottom:22px;}
+  .search-wrapper{position:relative;margin-bottom:13px;}
+  .s-icon{position:absolute;left:20px;top:50%;transform:translateY(-50%);font-size:18px;color:rgba(255,255,255,.3);pointer-events:none;}
+  #searchInput{width:100%;padding:18px 56px 18px 54px;background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.1);border-radius:16px;font-family:'DM Sans',sans-serif;font-size:16px;color:#fff;outline:none;transition:all .2s;}
+  #searchInput::placeholder{color:rgba(255,255,255,.25);}
+  #searchInput:focus{border-color:var(--blue);background:rgba(29,107,243,.07);box-shadow:0 0 0 4px rgba(29,107,243,.13);}
+  .clear-btn{position:absolute;right:16px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.08);border:none;border-radius:8px;color:rgba(255,255,255,.4);font-size:15px;width:32px;height:32px;cursor:pointer;display:none;align-items:center;justify-content:center;}
+  .clear-btn:hover{background:rgba(255,255,255,.15);color:#fff;}
+  .clear-btn.visible{display:flex;}
+  .filters{display:flex;gap:7px;align-items:center;flex-wrap:wrap;}
+  .filter-lbl{font-size:11px;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:1px;margin-right:2px;}
+  .f-btn{padding:6px 15px;border-radius:100px;border:1.5px solid rgba(255,255,255,.1);background:transparent;color:rgba(255,255,255,.45);font-family:'DM Sans',sans-serif;font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;}
+  .f-btn:hover{border-color:rgba(255,255,255,.28);color:#fff;}
+  .f-all{background:var(--blue);border-color:var(--blue);color:#fff;}
+  .f-active{background:var(--green);border-color:var(--green);color:#fff;}
+  .f-inactive{background:var(--red);border-color:var(--red);color:#fff;}
+  .f-prospect{background:var(--orange);border-color:var(--orange);color:#fff;}
+
+  /* ── Results ── */
+  .results-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+  .results-count{font-size:13px;color:rgba(255,255,255,.38);font-family:'DM Mono',monospace;}
+  .results-count span{color:#fff;font-weight:500;}
+
+  /* ── Table ── */
+  .table-wrap{background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.07);border-radius:18px;overflow:hidden;}
+  table{width:100%;border-collapse:collapse;}
+  thead tr{background:rgba(255,255,255,.045);border-bottom:1px solid rgba(255,255,255,.07);}
+  thead th{padding:13px 16px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;color:rgba(255,255,255,.32);white-space:nowrap;}
+  tbody tr{border-bottom:1px solid rgba(255,255,255,.04);transition:background .12s;animation:rowIn .2s ease both;}
+  tbody tr:last-child{border-bottom:none;}
+  tbody tr:hover{background:rgba(255,255,255,.035);}
+  @keyframes rowIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+  td{padding:12px 16px;font-size:13px;color:rgba(255,255,255,.78);vertical-align:middle;}
+  td.name{font-weight:700;color:#fff;font-size:14px;}
+  td.mono{font-family:'DM Mono',monospace;font-size:12px;color:rgba(255,255,255,.52);}
+  td.num{font-family:'DM Mono',monospace;font-size:11px;color:rgba(255,255,255,.2);text-align:center;}
+  .hub-tag{display:inline-flex;align-items:center;gap:4px;background:rgba(29,107,243,.11);border:1px solid rgba(29,107,243,.2);padding:3px 10px;border-radius:6px;font-size:12px;color:#93c5fd;white-space:nowrap;}
+  .s-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 11px;border-radius:100px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;white-space:nowrap;}
+  .s-active{background:rgba(22,163,74,.14);color:#4ade80;}
+  .s-inactive{background:rgba(220,38,38,.14);color:#f87171;}
+  .s-prospect{background:rgba(234,88,12,.14);color:#fb923c;}
+  .s-dot{width:6px;height:6px;border-radius:50%;}
+  .s-active .s-dot{background:#4ade80;box-shadow:0 0 5px #4ade80;}
+  .s-inactive .s-dot{background:#f87171;}
+  .s-prospect .s-dot{background:#fb923c;}
+  .comment-count{display:inline-flex;align-items:center;gap:4px;background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.2);padding:2px 8px;border-radius:100px;font-size:11px;color:#c4b5fd;cursor:pointer;transition:all .15s;}
+  .comment-count:hover{background:rgba(139,92,246,.22);}
+  .action-col{text-align:center;white-space:nowrap;}
+  .edit-btn{background:none;border:1px solid rgba(251,191,36,.3);border-radius:7px;color:#fbbf24;font-size:12px;padding:4px 10px;cursor:pointer;transition:all .12s;}
+  .edit-btn:hover{background:rgba(251,191,36,.15);border-color:#fbbf24;}
+  .del-btn{background:none;border:1px solid rgba(220,38,38,.3);border-radius:7px;color:#f87171;font-size:12px;padding:4px 8px;cursor:pointer;transition:all .12s;margin-left:4px;}
+  .del-btn:hover{background:rgba(220,38,38,.15);border-color:#f87171;}
+
+  /* ── Loading spinner ── */
+  .loading{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px;gap:16px;}
+  .spinner{width:36px;height:36px;border:3px solid rgba(255,255,255,.1);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .loading p{color:rgba(255,255,255,.4);font-size:13px;}
+
+  /* ── Empty ── */
+  .empty{padding:70px 20px;text-align:center;}
+  .empty .ei{font-size:42px;opacity:.3;margin-bottom:14px;}
+  .empty h3{color:rgba(255,255,255,.4);font-size:17px;font-weight:500;margin-bottom:6px;}
+  .empty p{color:rgba(255,255,255,.2);font-size:13px;}
+
+  /* ── Modals ── */
+  .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:200;align-items:center;justify-content:center;backdrop-filter:blur(5px);}
+  .overlay.open{display:flex;}
+  .modal{background:#0f1e35;border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:34px;width:90%;max-width:560px;max-height:90vh;overflow-y:auto;animation:rowIn .2s ease;}
+  .modal h2{font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:1.5px;color:#fff;margin-bottom:4px;}
+  .modal .sub{font-size:13px;color:rgba(255,255,255,.38);margin-bottom:24px;line-height:1.5;}
+  .modal-close{float:right;background:none;border:none;color:rgba(255,255,255,.35);font-size:20px;cursor:pointer;margin-top:-2px;}
+  .modal-close:hover{color:#fff;}
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px;}
+  .form-group{display:flex;flex-direction:column;gap:5px;}
+  .form-group.full{grid-column:1/-1;}
+  .form-group label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,.32);font-weight:600;}
+  .form-group input,.form-group select,.form-group textarea{padding:10px 13px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;transition:border-color .15s;}
+  .form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--blue);}
+  .form-group select option{background:#1b2e4a;}
+  .form-group textarea{resize:vertical;min-height:70px;}
+  .form-note{font-size:11px;color:rgba(255,255,255,.28);margin-bottom:16px;font-style:italic;}
+  .form-actions{display:flex;gap:10px;}
+  .btn-save{padding:11px 26px;background:var(--blue);border:none;border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;}
+  .btn-save:hover{background:#1558d6;}
+  .btn-save:disabled{opacity:.5;cursor:not-allowed;}
+  .btn-cancel{padding:11px 18px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:rgba(255,255,255,.45);font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;}
+  .btn-cancel:hover{color:#fff;}
+  .btn-delete{padding:11px 26px;background:#dc2626;border:none;border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;}
+  .btn-delete:hover{background:#b91c1c;}
+  .confirm-box{background:rgba(220,38,38,.07);border:1px solid rgba(220,38,38,.22);border-radius:12px;padding:20px;margin-bottom:20px;}
+  .confirm-box p{color:rgba(255,255,255,.7);font-size:14px;line-height:1.6;}
+  .confirm-box strong{color:#fff;}
+
+  /* ── Supervisor edit ── */
+  .carrier-edit-name{font-size:18px;font-weight:700;color:#fff;margin-bottom:4px;}
+  .carrier-edit-sub{font-size:12px;color:rgba(255,255,255,.38);margin-bottom:22px;}
+  .edit-section-title{font-size:10px;text-transform:uppercase;letter-spacing:1.2px;color:rgba(255,255,255,.35);font-weight:600;margin-bottom:10px;}
+  .status-options{display:flex;gap:10px;margin-bottom:22px;}
+  .status-opt{flex:1;padding:12px;border-radius:12px;border:2px solid rgba(255,255,255,.08);background:transparent;color:rgba(255,255,255,.4);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;text-align:center;}
+  .status-opt:hover{border-color:rgba(255,255,255,.2);color:#fff;}
+  .sel-active{background:rgba(22,163,74,.2)!important;border-color:#4ade80!important;color:#4ade80!important;}
+  .sel-inactive{background:rgba(220,38,38,.2)!important;border-color:#f87171!important;color:#f87171!important;}
+  .sel-prospect{background:rgba(234,88,12,.2)!important;border-color:#fb923c!important;color:#fb923c!important;}
+  .rating-coming{background:rgba(251,191,36,.07);border:1.5px dashed rgba(251,191,36,.25);border-radius:12px;padding:18px;text-align:center;margin-bottom:22px;}
+  .rating-coming p{color:rgba(255,255,255,.4);font-size:13px;line-height:1.6;}
+  .rating-coming strong{color:#fbbf24;}
+
+  /* ── Comments ── */
+  .comments-section{margin-top:24px;}
+  .comments-header{font-size:10px;text-transform:uppercase;letter-spacing:1.2px;color:rgba(255,255,255,.35);font-weight:600;margin-bottom:14px;}
+  .comment-item{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:12px 14px;margin-bottom:8px;position:relative;}
+  .comment-author{font-size:11px;font-weight:600;color:#c4b5fd;margin-bottom:4px;}
+  .comment-text{font-size:13px;color:rgba(255,255,255,.7);line-height:1.5;}
+  .comment-date{font-size:10px;color:rgba(255,255,255,.25);margin-top:6px;font-family:'DM Mono',monospace;}
+  .comment-del{position:absolute;top:10px;right:10px;background:none;border:none;color:rgba(255,255,255,.2);cursor:pointer;font-size:14px;display:none;}
+  .comment-del:hover{color:#f87171;}
+  .no-comments{text-align:center;padding:20px;color:rgba(255,255,255,.25);font-size:13px;font-style:italic;}
+  .comment-form{margin-top:14px;display:flex;flex-direction:column;gap:10px;}
+  .comment-inputs{display:grid;grid-template-columns:1fr 2fr;gap:10px;}
+  .comment-input{padding:10px 13px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;}
+  .comment-input:focus{border-color:var(--purple);}
+  .comment-input::placeholder{color:rgba(255,255,255,.25);}
+  .comment-textarea{padding:10px 13px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;resize:vertical;min-height:60px;}
+  .comment-textarea:focus{border-color:var(--purple);}
+  .comment-textarea::placeholder{color:rgba(255,255,255,.25);}
+  .btn-comment{padding:10px 20px;background:var(--purple);border:none;border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;align-self:flex-end;}
+  .btn-comment:hover{background:#7c3aed;}
+  .btn-comment:disabled{opacity:.5;cursor:not-allowed;}
+
+  /* ── PIN ── */
+  .pin-dots{display:flex;justify-content:center;gap:12px;margin:20px 0 8px;}
+  .pin-dot{width:14px;height:14px;border-radius:50%;background:rgba(255,255,255,.1);border:2px solid rgba(255,255,255,.2);transition:all .15s;}
+  .pin-dot.filled{background:#fbbf24;border-color:#fbbf24;}
+  .pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px;}
+  .pin-key{padding:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:12px;color:#fff;font-family:'DM Mono',monospace;font-size:18px;font-weight:600;cursor:pointer;transition:all .12s;text-align:center;}
+  .pin-key:hover{background:rgba(255,255,255,.12);}
+  .pin-key:active{transform:scale(.94);}
+  .pin-error{text-align:center;color:#f87171;font-size:13px;margin-top:8px;min-height:20px;}
+
+  /* ── Import ── */
+  .import-zone{border:2px dashed rgba(22,163,74,.28);border-radius:14px;padding:34px 20px;text-align:center;cursor:pointer;transition:all .18s;background:rgba(22,163,74,.03);margin-bottom:18px;}
+  .import-zone:hover,.import-zone.over{border-color:#4ade80;background:rgba(22,163,74,.07);}
+  .import-zone .iz-icon{font-size:34px;margin-bottom:8px;}
+  .import-zone h3{color:#fff;font-size:15px;font-weight:600;margin-bottom:5px;}
+  .import-zone p{color:rgba(255,255,255,.38);font-size:13px;line-height:1.6;}
+  .import-zone p strong{color:#4ade80;}
+  .col-ref{background:rgba(255,255,255,.04);border-radius:12px;padding:16px 18px;margin-bottom:16px;}
+  .col-ref h4{color:rgba(255,255,255,.5);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:11px;}
+  .col-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;}
+  .col-item{display:flex;align-items:center;gap:8px;font-size:12.5px;}
+  .col-letter{font-family:'DM Mono',monospace;color:var(--blue);font-weight:600;min-width:18px;}
+  .col-name{color:rgba(255,255,255,.55);}
+  .import-msg{padding:10px 15px;border-radius:9px;font-size:13px;margin-bottom:14px;}
+  .msg-ok{background:rgba(22,163,74,.13);color:#4ade80;border:1px solid rgba(22,163,74,.2);}
+  .msg-err{background:rgba(220,38,38,.13);color:#f87171;border:1px solid rgba(220,38,38,.2);}
+  .preview-wrap{overflow-x:auto;margin-bottom:16px;}
+  .preview-tbl{width:100%;border-collapse:collapse;font-size:12px;}
+  .preview-tbl th{padding:8px 10px;background:rgba(255,255,255,.05);color:rgba(255,255,255,.38);text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:1px;}
+  .preview-tbl td{padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.04);color:rgba(255,255,255,.7);}
+
+  /* ── Toast ── */
+  .toast{position:fixed;bottom:26px;right:26px;color:#fff;padding:13px 20px;border-radius:12px;font-size:13px;font-weight:500;box-shadow:0 8px 28px rgba(0,0,0,.4);transform:translateY(70px);opacity:0;transition:all .3s cubic-bezier(.34,1.56,.64,1);z-index:999;pointer-events:none;}
+  .toast.show{transform:translateY(0);opacity:1;}
+
+  @media(max-width:800px){.hide-m{display:none;}.form-grid{grid-template-columns:1fr;}.comment-inputs{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+
+<!-- credentials baked in — no setup screen needed -->
+
+<!-- ── MAIN APP ──────────────────────────────────────────────────────────────── -->
+<div class="app" id="mainApp" style="display:none">
+  <header>
+    <div class="logo">
+      <div class="logo-icon">🚛</div>
+      <div class="logo-text">
+        <h1>TRUCKER DIRECTORY</h1>
+        <p>Carrier &amp; Owner-Operator Database</p>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="live-badge"><div class="live-dot"></div>LIVE</div>
+      <div class="header-stats" id="headerStats"></div>
+    </div>
+  </header>
+
+  <div class="top-actions">
+    <button class="action-btn btn-import" onclick="document.getElementById('importOverlay').classList.add('open')">📥 Import from Excel</button>
+    <button class="action-btn btn-add"    onclick="document.getElementById('addOverlay').classList.add('open')">＋ Add Carrier</button>
+    <button class="action-btn btn-super"  id="superBtn" onclick="openSupervisor()">🔒 Supervisor Mode</button>
+    <button class="action-btn btn-clearall" id="clearAllBtn" onclick="document.getElementById('clearAllOverlay').classList.add('open')">🗑️ Clear All</button>
+  </div>
+
+  <div class="search-section">
+    <div class="search-wrapper">
+      <span class="s-icon">🔍</span>
+      <input type="text" id="searchInput" placeholder="Search by carrier name, city, port, airport, state...">
+      <button class="clear-btn" id="clearBtn" onclick="clearSearch()">✕</button>
+    </div>
+    <div class="filters">
+      <span class="filter-lbl">Status:</span>
+      <button class="f-btn f-all"      onclick="setFilter('ALL',this)">All</button>
+      <button class="f-btn"            onclick="setFilter('Active',this)">● Active</button>
+      <button class="f-btn"            onclick="setFilter('Inactive',this)">● Inactive</button>
+      <button class="f-btn"            onclick="setFilter('Prospect',this)">● Prospect</button>
+    </div>
+  </div>
+
+  <div class="results-bar">
+    <div class="results-count" id="resultsCount"></div>
+  </div>
+
+  <div class="table-wrap">
+    <div class="loading" id="loadingState">
+      <div class="spinner"></div>
+      <p>Loading carriers from database...</p>
+    </div>
+    <table id="mainTable" style="display:none">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Carrier Name</th>
+          <th class="hide-m">Contact</th>
+          <th>Phone</th>
+          <th class="hide-m">Email</th>
+          <th>Hub / Port / Airport</th>
+          <th class="hide-m">City</th>
+          <th class="hide-m">State</th>
+          <th>Status</th>
+          <th>💬</th>
+          <th id="editColHdr" style="display:none">Edit</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+    <div class="empty" id="emptyState" style="display:none">
+      <div class="ei">🔎</div>
+      <h3>No carriers found</h3>
+      <p>Try a different keyword — name, city, port, airport or state</p>
+    </div>
+  </div>
+</div>
+
+<!-- ── ADD MODAL ──────────────────────────────────────────────────────────────── -->
+<div class="overlay" id="addOverlay">
+  <div class="modal">
+    <button class="modal-close" onclick="closeOverlay('addOverlay')">✕</button>
+    <h2>＋ ADD NEW CARRIER</h2>
+    <p class="sub">New carriers are set to Prospect by default and saved live.</p>
+    <div class="form-grid">
+      <div class="form-group full"><label>Carrier Name *</label><input id="f_name" placeholder="e.g. FastLane Trucking"></div>
+      <div class="form-group"><label>Contact Name</label><input id="f_contact" placeholder="e.g. Carlos Rivera"></div>
+      <div class="form-group"><label>Phone *</label><input id="f_phone" placeholder="(305) 555-0101"></div>
+      <div class="form-group full"><label>Email</label><input id="f_email" placeholder="email@company.com"></div>
+      <div class="form-group"><label>City *</label><input id="f_city" placeholder="e.g. Miami"></div>
+      <div class="form-group"><label>State</label><input id="f_state" placeholder="e.g. FL"></div>
+      <div class="form-group full"><label>Hub / Port / Airport *</label><input id="f_hub" placeholder="e.g. Port of Miami / LAX"></div>
+    </div>
+    <p class="form-note">🔒 Status and Rating are managed by the supervisor.</p>
+    <div class="form-actions">
+      <button class="btn-save" id="btnAddSave" onclick="addCarrier()">Save Carrier</button>
+      <button class="btn-cancel" onclick="closeOverlay('addOverlay')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── COMMENTS MODAL ─────────────────────────────────────────────────────────── -->
+<div class="overlay" id="commentsOverlay">
+  <div class="modal" style="max-width:580px">
+    <button class="modal-close" onclick="closeOverlay('commentsOverlay')">✕</button>
+    <h2>💬 COMMENTS</h2>
+    <p class="sub" id="commentCarrierName"></p>
+    <div class="comments-section">
+      <div class="comments-header">Comments</div>
+      <div id="commentsList"></div>
+      <div class="comment-form">
+        <div class="comment-inputs">
+          <input class="comment-input" id="commentAuthor" placeholder="Your name (optional)">
+          <input class="comment-input" id="commentTitle" placeholder="Subject (optional)">
+        </div>
+        <textarea class="comment-textarea" id="commentText" placeholder="Write your comment about this carrier..."></textarea>
+        <button class="btn-comment" id="btnComment" onclick="submitComment()">Post Comment</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── SUPERVISOR PIN ─────────────────────────────────────────────────────────── -->
+<div class="overlay" id="pinOverlay">
+  <div class="modal" style="max-width:340px;text-align:center">
+    <button class="modal-close" onclick="closeOverlay('pinOverlay')">✕</button>
+    <h2>🔒 SUPERVISOR ACCESS</h2>
+    <p class="sub">Enter your PIN to unlock editing.</p>
+    <div class="pin-dots">
+      <div class="pin-dot" id="d0"></div><div class="pin-dot" id="d1"></div>
+      <div class="pin-dot" id="d2"></div><div class="pin-dot" id="d3"></div>
+    </div>
+    <div class="pin-error" id="pinError"></div>
+    <div class="pin-pad">
+      <button class="pin-key" onclick="pinPress('1')">1</button>
+      <button class="pin-key" onclick="pinPress('2')">2</button>
+      <button class="pin-key" onclick="pinPress('3')">3</button>
+      <button class="pin-key" onclick="pinPress('4')">4</button>
+      <button class="pin-key" onclick="pinPress('5')">5</button>
+      <button class="pin-key" onclick="pinPress('6')">6</button>
+      <button class="pin-key" onclick="pinPress('7')">7</button>
+      <button class="pin-key" onclick="pinPress('8')">8</button>
+      <button class="pin-key" onclick="pinPress('9')">9</button>
+      <button class="pin-key" onclick="pinDel()">⌫</button>
+      <button class="pin-key" onclick="pinPress('0')">0</button>
+      <button class="pin-key" onclick="pinClear()">C</button>
+    </div>
+    <p style="font-size:11px;color:rgba(255,255,255,.2);margin-top:16px">Default PIN: 1234</p>
+  </div>
+</div>
+
+<!-- ── SUPERVISOR EDIT ────────────────────────────────────────────────────────── -->
+<div class="overlay" id="editOverlay">
+  <div class="modal" style="max-width:480px">
+    <button class="modal-close" onclick="closeOverlay('editOverlay')">✕</button>
+    <h2>✏️ EDIT CARRIER</h2>
+    <p class="sub">Supervisor view — changes save live instantly.</p>
+    <div class="carrier-edit-name" id="editCarrierName"></div>
+    <div class="carrier-edit-sub"  id="editCarrierSub"></div>
+    <div class="edit-section-title">STATUS</div>
+    <div class="status-options">
+      <button class="status-opt" id="opt-active"   onclick="selectStatus('Active')">✅ Active</button>
+      <button class="status-opt" id="opt-inactive" onclick="selectStatus('Inactive')">🔴 Inactive</button>
+      <button class="status-opt" id="opt-prospect" onclick="selectStatus('Prospect')">🟠 Prospect</button>
+    </div>
+    <div class="edit-section-title">RATING</div>
+    <div class="rating-coming"><p>⏳ Rating parameters are being defined.<br><strong>Coming next week</strong></p></div>
+    <div class="edit-section-title">INTERNAL NOTES (supervisor only)</div>
+    <div class="form-group full" style="margin-bottom:18px"><textarea class="form-group" style="width:100%;padding:10px 13px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;resize:vertical;min-height:70px;" id="editNotes" placeholder="Supervisor notes..."></textarea></div>
+    <div class="form-actions">
+      <button class="btn-save" id="btnEditSave" onclick="saveEdit()">Save Changes</button>
+      <button class="btn-cancel" onclick="closeOverlay('editOverlay')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── DELETE MODAL ───────────────────────────────────────────────────────────── -->
+<div class="overlay" id="deleteOverlay">
+  <div class="modal" style="max-width:420px">
+    <button class="modal-close" onclick="closeOverlay('deleteOverlay')">✕</button>
+    <h2>🗑️ DELETE CARRIER</h2>
+    <p class="sub">This cannot be undone — removes from the live database.</p>
+    <div class="confirm-box"><p>You are about to delete:<br><strong id="deleteCarrierName"></strong></p></div>
+    <div class="form-actions">
+      <button class="btn-delete" onclick="doDelete()">Yes, Delete</button>
+      <button class="btn-cancel" onclick="closeOverlay('deleteOverlay')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── CLEAR ALL MODAL ────────────────────────────────────────────────────────── -->
+<div class="overlay" id="clearAllOverlay">
+  <div class="modal" style="max-width:420px">
+    <button class="modal-close" onclick="closeOverlay('clearAllOverlay')">✕</button>
+    <h2>🗑️ CLEAR ALL CARRIERS</h2>
+    <p class="sub">This will delete ALL carriers from the live database permanently.</p>
+    <div class="confirm-box"><p>Are you sure you want to <strong>delete all carriers</strong>?</p></div>
+    <div class="form-actions">
+      <button class="btn-delete" onclick="doClearAll()">Yes, Clear Everything</button>
+      <button class="btn-cancel" onclick="closeOverlay('clearAllOverlay')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── IMPORT MODAL ───────────────────────────────────────────────────────────── -->
+<div class="overlay" id="importOverlay">
+  <div class="modal">
+    <button class="modal-close" onclick="closeOverlay('importOverlay')">✕</button>
+    <h2>📥 IMPORT FROM EXCEL</h2>
+    <p class="sub">Imported carriers are saved to the live database instantly.</p>
+    <div id="importMsg" style="display:none"></div>
+    <div class="import-zone" id="importZone" onclick="document.getElementById('fileInput').click()">
+      <input type="file" id="fileInput" accept=".csv,.xlsx" style="display:none" onchange="handleFile(this.files[0])">
+      <div class="iz-icon">📂</div>
+      <h3>Click to select your file</h3>
+      <p>Accepts <strong>.xlsx</strong> or <strong>.csv</strong> — Drag &amp; drop also works</p>
+    </div>
+    <div class="col-ref">
+      <h4>Expected column order</h4>
+      <div class="col-grid">
+        <div class="col-item"><span class="col-letter">A</span><span class="col-name">Carrier Name / Trucker</span></div>
+        <div class="col-item"><span class="col-letter">B</span><span class="col-name">Contact Name</span></div>
+        <div class="col-item"><span class="col-letter">C</span><span class="col-name">Phone</span></div>
+        <div class="col-item"><span class="col-letter">D</span><span class="col-name">Email</span></div>
+        <div class="col-item"><span class="col-letter">E</span><span class="col-name">City</span></div>
+        <div class="col-item"><span class="col-letter">F</span><span class="col-name">Port or Airport</span></div>
+        <div class="col-item"><span class="col-letter">G</span><span class="col-name">State</span></div>
+      </div>
+    </div>
+    <div id="importPreview" style="display:none">
+      <p id="previewLabel" style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:8px;"></p>
+      <div class="preview-wrap"><table class="preview-tbl" id="previewTbl"></table></div>
+      <div class="form-actions">
+        <button class="btn-save" id="btnImportConfirm" onclick="confirmImport()">Import All Records</button>
+        <button class="btn-cancel" onclick="closeOverlay('importOverlay')">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// credentials baked in directly
+let sb = null;
+let carriers = [];
+let filter = 'ALL', term = '';
+let supervisorMode = false, editingId = null, editingStatus = null, deletingId = null;
+let activeCommentCarrierId = null;
+const PIN = '1234';
+let pending = [];
+
+// ── Supabase — credentials baked in ─────────────────────────────────────────
+const SB_URL = 'https://lccpafspcpwglozcxoih.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxjY3BhZnNwY3B3Z2xvemN4b2loIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg3MjQ3NTAsImV4cCI6MjA5NDMwMDc1MH0.8ANKzK1Q9SEM6ruMEuATdnRZozPnppANKK_IapIPdMQ';
+
+window.addEventListener('DOMContentLoaded', async () => {
+  sb = supabase.createClient(SB_URL, SB_KEY);
+  document.getElementById('mainApp').style.display = 'block';
+  await loadCarriers();
+  subscribeRealtime();
+});
+
+// ── Real-time subscription ────────────────────────────────────────────────────
+function subscribeRealtime() {
+  sb.channel('carriers-changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'carriers' }, () => loadCarriers())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, () => {
+      if (activeCommentCarrierId) loadComments(activeCommentCarrierId);
+    })
+    .subscribe();
+}
+
+// ── Load carriers ─────────────────────────────────────────────────────────────
+async function loadCarriers() {
+  const { data, error } = await sb.from('carriers').select('*').order('created_at', { ascending: false });
+  if (error) { console.error(error); return; }
+  carriers = data || [];
+
+  // Get comment counts
+  const { data: counts } = await sb.from('comments').select('carrier_id');
+  const countMap = {};
+  (counts || []).forEach(c => { countMap[c.carrier_id] = (countMap[c.carrier_id] || 0) + 1; });
+  carriers.forEach(c => { c._commentCount = countMap[c.id] || 0; });
+
+  document.getElementById('loadingState').style.display = 'none';
+  document.getElementById('mainTable').style.display = '';
+  render();
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function hl(t, q) {
+  if (!q || !t) return t || '';
+  return String(t).replace(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`,'gi'),
+    '<mark style="background:rgba(29,107,243,.32);color:#fff;border-radius:3px;padding:0 2px">$1</mark>');
+}
+
+function render() {
+  const q = term.toLowerCase().trim();
+  const list = carriers.filter(c => {
+    if (filter !== 'ALL' && c.status !== filter) return false;
+    if (!q) return true;
+    return [c.name,c.city,c.hub,c.contact,c.email,c.state,c.phone].join(' ').toLowerCase().includes(q);
+  });
+
+  const tbody = document.getElementById('tableBody');
+  const empty = document.getElementById('emptyState');
+  document.getElementById('editColHdr').style.display = supervisorMode ? '' : 'none';
+
+  if (!list.length) {
+    tbody.innerHTML = ''; empty.style.display = 'block';
+  } else {
+    empty.style.display = 'none';
+    tbody.innerHTML = list.map((c, i) => `
+      <tr style="animation-delay:${i*.02}s">
+        <td class="num">${i+1}</td>
+        <td class="name">${hl(c.name,q)}</td>
+        <td class="hide-m">${hl(c.contact,q)||'—'}</td>
+        <td class="mono">${hl(c.phone,q)||'—'}</td>
+        <td class="hide-m mono" style="font-size:11.5px">${hl(c.email,q)||'—'}</td>
+        <td><span class="hub-tag">✈ ${hl(c.hub,q)}</span></td>
+        <td class="hide-m">${hl(c.city,q)||'—'}</td>
+        <td class="hide-m">${hl(c.state,q)||'—'}</td>
+        <td><span class="s-badge s-${c.status.toLowerCase()}"><span class="s-dot"></span>${c.status}</span></td>
+        <td><span class="comment-count" onclick="openComments('${c.id}','${c.name.replace(/'/g,"\\'")}')">
+          💬 ${c._commentCount||0}</span></td>
+        ${supervisorMode ? `<td class="action-col">
+          <button class="edit-btn" onclick="openEdit('${c.id}')">✏️ Edit</button>
+          <button class="del-btn"  onclick="confirmDelete('${c.id}','${c.name.replace(/'/g,"\\'")}')">🗑️</button>
+        </td>` : ''}
+      </tr>`).join('');
+  }
+
+  const cnt = document.getElementById('resultsCount');
+  cnt.innerHTML = (!q && filter==='ALL')
+    ? `Showing all <span>${list.length}</span> carriers`
+    : `<span>${list.length}</span> result${list.length!==1?'s':''} found`;
+
+  const t=carriers.length, a=carriers.filter(c=>c.status==='Active').length,
+        n=carriers.filter(c=>c.status==='Inactive').length, p=carriers.filter(c=>c.status==='Prospect').length;
+  document.getElementById('headerStats').innerHTML = `
+    <div class="stat-pill"><span class="num">${t}</span><span class="lbl">Total</span></div>
+    <div class="stat-div"></div>
+    <div class="stat-pill"><span class="num" style="color:#4ade80">${a}</span><span class="lbl">Active</span></div>
+    <div class="stat-div"></div>
+    <div class="stat-pill"><span class="num" style="color:#f87171">${n}</span><span class="lbl">Inactive</span></div>
+    <div class="stat-div"></div>
+    <div class="stat-pill"><span class="num" style="color:#fb923c">${p}</span><span class="lbl">Prospects</span></div>`;
+}
+
+// ── Search & Filter ───────────────────────────────────────────────────────────
+document.getElementById('searchInput').addEventListener('input', function(){
+  term = this.value;
+  document.getElementById('clearBtn').classList.toggle('visible', term.length > 0);
+  render();
+});
+function clearSearch(){ term=''; document.getElementById('searchInput').value=''; document.getElementById('clearBtn').classList.remove('visible'); render(); }
+function setFilter(f,btn){ filter=f; document.querySelectorAll('.f-btn').forEach(b=>b.className='f-btn'); const map={ALL:'f-all',Active:'f-active',Inactive:'f-inactive',Prospect:'f-prospect'}; btn.classList.add(map[f]); render(); }
+
+// ── Add Carrier ───────────────────────────────────────────────────────────────
+async function addCarrier() {
+  const name=document.getElementById('f_name').value.trim();
+  const phone=document.getElementById('f_phone').value.trim();
+  const city=document.getElementById('f_city').value.trim();
+  const hub=document.getElementById('f_hub').value.trim();
+  if(!name||!phone||!city||!hub){ toast('Please fill in all required fields (*)','#dc2626'); return; }
+  const btn=document.getElementById('btnAddSave'); btn.disabled=true; btn.textContent='Saving...';
+  const { error } = await sb.from('carriers').insert({
+    name, contact:document.getElementById('f_contact').value.trim(),
+    phone, email:document.getElementById('f_email').value.trim(),
+    city, state:document.getElementById('f_state').value.trim(), hub, status:'Prospect'
+  });
+  btn.disabled=false; btn.textContent='Save Carrier';
+  if(error){ toast('Error saving: '+error.message,'#dc2626'); return; }
+  ['f_name','f_contact','f_phone','f_email','f_city','f_state','f_hub'].forEach(id=>document.getElementById(id).value='');
+  closeOverlay('addOverlay');
+  toast('✓ Carrier added — visible to everyone now!','#16a34a');
+}
+
+// ── Comments ──────────────────────────────────────────────────────────────────
+async function openComments(carrierId, carrierName) {
+  activeCommentCarrierId = carrierId;
+  document.getElementById('commentCarrierName').textContent = carrierName;
+  document.getElementById('commentAuthor').value = '';
+  document.getElementById('commentTitle').value = '';
+  document.getElementById('commentText').value = '';
+  document.getElementById('commentsList').innerHTML = '<div class="no-comments">Loading comments...</div>';
+  document.getElementById('commentsOverlay').classList.add('open');
+  await loadComments(carrierId);
+}
+
+async function loadComments(carrierId) {
+  const { data, error } = await sb.from('comments').select('*').eq('carrier_id', carrierId).order('created_at', { ascending: true });
+  const list = document.getElementById('commentsList');
+  if (error || !data || !data.length) {
+    list.innerHTML = '<div class="no-comments">No comments yet — be the first to leave one!</div>';
+    return;
+  }
+  list.innerHTML = data.map(c => `
+    <div class="comment-item" id="cmt-${c.id}">
+      <div class="comment-author">${c.author||'Anonymous'}${c.title?' — <span style="color:rgba(255,255,255,.5);font-weight:400">'+c.title+'</span>':''}</div>
+      <div class="comment-text">${c.content}</div>
+      <div class="comment-date">${new Date(c.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
+      ${supervisorMode ? `<button class="comment-del" style="display:block" onclick="deleteComment('${c.id}')">✕</button>` : ''}
+    </div>`).join('');
+}
+
+async function submitComment() {
+  const content = document.getElementById('commentText').value.trim();
+  if (!content) { toast('Please write a comment first','#dc2626'); return; }
+  const btn = document.getElementById('btnComment'); btn.disabled=true; btn.textContent='Posting...';
+  const { error } = await sb.from('comments').insert({
+    carrier_id: activeCommentCarrierId,
+    author: document.getElementById('commentAuthor').value.trim() || 'Anonymous',
+    content
+  });
+  btn.disabled=false; btn.textContent='Post Comment';
+  if (error) { toast('Error posting comment','#dc2626'); return; }
+  document.getElementById('commentText').value='';
+  document.getElementById('commentAuthor').value='';
+  document.getElementById('commentTitle').value='';
+  await loadComments(activeCommentCarrierId);
+  await loadCarriers();
+  toast('✓ Comment posted!','#8b5cf6');
+}
+
+async function deleteComment(commentId) {
+  await sb.from('comments').delete().eq('id', commentId);
+  await loadComments(activeCommentCarrierId);
+  await loadCarriers();
+  toast('Comment deleted','#dc2626');
+}
+
+// ── Overlays ──────────────────────────────────────────────────────────────────
+function closeOverlay(id){
+  document.getElementById(id).classList.remove('open');
+  if(id==='importOverlay') resetImport();
+  if(id==='pinOverlay') pinClear();
+  if(id==='commentsOverlay') activeCommentCarrierId=null;
+}
+document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{ if(e.target===o) closeOverlay(o.id); }));
+
+// ── Supervisor PIN ────────────────────────────────────────────────────────────
+let pinEntry='';
+function openSupervisor(){ if(supervisorMode){exitSupervisor();return;} pinEntry='';updateDots();document.getElementById('pinError').textContent='';document.getElementById('pinOverlay').classList.add('open'); }
+function pinPress(d){ if(pinEntry.length>=4)return; pinEntry+=d; updateDots(); if(pinEntry.length===4)setTimeout(checkPin,150); }
+function pinDel(){ pinEntry=pinEntry.slice(0,-1); updateDots(); }
+function pinClear(){ pinEntry=''; updateDots(); document.getElementById('pinError').textContent=''; }
+function updateDots(){ for(let i=0;i<4;i++) document.getElementById('d'+i).classList.toggle('filled',i<pinEntry.length); }
+function checkPin(){
+  if(pinEntry===PIN){
+    supervisorMode=true; closeOverlay('pinOverlay');
+    const btn=document.getElementById('superBtn'); btn.classList.add('active'); btn.innerHTML='🔓 Supervisor Mode ON';
+    document.getElementById('clearAllBtn').style.display='flex';
+    render(); toast('✓ Supervisor mode activated','#fbbf24');
+  } else { document.getElementById('pinError').textContent='Incorrect PIN — try again'; pinEntry=''; updateDots(); }
+}
+function exitSupervisor(){
+  supervisorMode=false;
+  const btn=document.getElementById('superBtn'); btn.classList.remove('active'); btn.innerHTML='🔒 Supervisor Mode';
+  document.getElementById('clearAllBtn').style.display='none';
+  render(); toast('Supervisor mode deactivated','#64748b');
+}
+
+// ── Edit Carrier ──────────────────────────────────────────────────────────────
+function openEdit(id){
+  const c=carriers.find(x=>x.id===id); if(!c)return;
+  editingId=id; editingStatus=c.status;
+  document.getElementById('editCarrierName').textContent=c.name;
+  document.getElementById('editCarrierSub').textContent=`${c.city}, ${c.state}  •  ${c.phone}`;
+  document.getElementById('editNotes').value=c.notes||'';
+  ['active','inactive','prospect'].forEach(s=>document.getElementById('opt-'+s).className='status-opt');
+  document.getElementById('opt-'+c.status.toLowerCase()).classList.add('sel-'+c.status.toLowerCase());
+  document.getElementById('editOverlay').classList.add('open');
+}
+function selectStatus(s){ editingStatus=s; ['active','inactive','prospect'].forEach(x=>document.getElementById('opt-'+x).className='status-opt'); document.getElementById('opt-'+s.toLowerCase()).classList.add('sel-'+s.toLowerCase()); }
+async function saveEdit(){
+  const btn=document.getElementById('btnEditSave'); btn.disabled=true; btn.textContent='Saving...';
+  const { error } = await sb.from('carriers').update({ status:editingStatus, notes:document.getElementById('editNotes').value.trim() }).eq('id',editingId);
+  btn.disabled=false; btn.textContent='Save Changes';
+  if(error){ toast('Error: '+error.message,'#dc2626'); return; }
+  closeOverlay('editOverlay');
+  toast('✓ Carrier updated — live for everyone','#fbbf24');
+}
+
+// ── Delete ────────────────────────────────────────────────────────────────────
+function confirmDelete(id,name){ deletingId=id; document.getElementById('deleteCarrierName').textContent=name; document.getElementById('deleteOverlay').classList.add('open'); }
+async function doDelete(){ const{error}=await sb.from('carriers').delete().eq('id',deletingId); closeOverlay('deleteOverlay'); if(error){toast('Error: '+error.message,'#dc2626');return;} toast('🗑️ Carrier deleted','#dc2626'); deletingId=null; }
+async function doClearAll(){ const{error}=await sb.from('carriers').delete().neq('id','00000000-0000-0000-0000-000000000000'); closeOverlay('clearAllOverlay'); if(error){toast('Error: '+error.message,'#dc2626');return;} toast('🗑️ All carriers removed','#dc2626'); }
+
+// ── Import ────────────────────────────────────────────────────────────────────
+function resetImport(){ document.getElementById('importMsg').style.display='none'; document.getElementById('importPreview').style.display='none'; document.getElementById('fileInput').value=''; pending=[]; }
+function handleFile(file){
+  if(!file)return;
+  const fname=file.name.toLowerCase();
+  if(!fname.endsWith('.csv')&&!fname.endsWith('.xlsx')){ showMsg('Please select a .csv or .xlsx file.','err'); return; }
+  const reader=new FileReader();
+  if(fname.endsWith('.xlsx')){
+    reader.onload=e=>{ try{ const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'}); const ws=wb.Sheets[wb.SheetNames[0]]; processRows(XLSX.utils.sheet_to_json(ws,{header:1,defval:''})); }catch(err){showMsg('Could not read file: '+err.message,'err');} };
+    reader.readAsArrayBuffer(file);
+  } else {
+    reader.onload=e=>{ const lines=e.target.result.replace(/\r/g,'').trim().split('\n').filter(l=>l.trim()); processRows(lines.map(l=>csvSplit(l))); };
+    reader.readAsText(file);
+  }
+}
+function processRows(rows){
+  if(!rows.length){showMsg('File is empty.','err');return;}
+  let start=0;
+  for(let i=0;i<Math.min(rows.length,5);i++){
+    const cell=String(rows[i][0]||'').trim().toLowerCase();
+    if(!cell||cell.includes('carrier name')||cell.includes('trucker')||cell.includes('directory')||cell.includes('import')){start=i+1;}else{break;}
+  }
+  pending=[];
+  for(let i=start;i<rows.length;i++){
+    const c=rows[i].map(v=>String(v||'').replace(/^"|"$/g,'').trim());
+    if(!c[0])continue;
+    pending.push({name:c[0],contact:c[1]||'',phone:c[2]||'',email:c[3]||'',city:c[4]||'',hub:c[5]||'',state:c[6]||'',status:'Prospect',notes:''});
+  }
+  if(!pending.length){showMsg('No valid records found.','err');return;}
+  showMsg('✓ '+pending.length+' carriers ready — preview below','ok');
+  const preview=pending.slice(0,5);
+  document.getElementById('previewLabel').textContent='Preview — first '+preview.length+' of '+pending.length;
+  document.getElementById('previewTbl').innerHTML='<thead><tr><th>Carrier Name</th><th>Contact</th><th>Phone</th><th>City</th><th>Hub/Port</th><th>State</th></tr></thead><tbody>'+preview.map(c=>`<tr><td>${c.name}</td><td>${c.contact||'—'}</td><td>${c.phone||'—'}</td><td>${c.city||'—'}</td><td>${c.hub||'—'}</td><td>${c.state||'—'}</td></tr>`).join('')+'</tbody>';
+  document.getElementById('importPreview').style.display='block';
+}
+function csvSplit(line){ const res=[];let cur='',inQ=false; for(const ch of line){if(ch==='"'){inQ=!inQ;}else if(ch===','&&!inQ){res.push(cur);cur='';}else cur+=ch;} res.push(cur); return res; }
+async function confirmImport(){
+  const btn=document.getElementById('btnImportConfirm'); btn.disabled=true; btn.textContent='Importing...';
+  const{error}=await sb.from('carriers').insert(pending);
+  btn.disabled=false; btn.textContent='Import All Records';
+  if(error){showMsg('Import error: '+error.message,'err');return;}
+  closeOverlay('importOverlay');
+  toast('✓ '+pending.length+' carriers imported — live for everyone!','#16a34a');
+  pending=[];
+}
+function showMsg(msg,type){ const el=document.getElementById('importMsg'); el.className='import-msg '+(type==='ok'?'msg-ok':'msg-err'); el.textContent=msg; el.style.display='block'; }
+
+// ── Drag & drop ───────────────────────────────────────────────────────────────
+const zone=document.getElementById('importZone');
+zone.addEventListener('dragover',e=>{e.preventDefault();zone.classList.add('over');});
+zone.addEventListener('dragleave',()=>zone.classList.remove('over'));
+zone.addEventListener('drop',e=>{e.preventDefault();zone.classList.remove('over');const f=e.dataTransfer.files[0];if(f)handleFile(f);});
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function toast(msg,bg='#16a34a'){ const el=document.getElementById('toast'); el.textContent=msg; el.style.background=bg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),3500); }
+</script>
+</body>
+</html>
 
